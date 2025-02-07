@@ -4,3 +4,6 @@ Repository containing scripts and code snippets used for comparative genomic ana
 
 ### 01_assemblies
 code snippets to produce the genome assemblies
+
+### 02_gene_prediction
+code snippets to predict the genes
