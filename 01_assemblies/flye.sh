@@ -17,7 +17,7 @@ conda activate flye
 
 
 
-sed -n '22,22p' samples.txt | tr '\t' '\n' | while read SAMPLE; do
+cat samples.txt | tr '\t' '\n' | while read SAMPLE; do
    read GENOSIZE
    read FASTQ
    

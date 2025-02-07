@@ -14,7 +14,7 @@ eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda sh
 conda activate nextdenovo
 nextDenovo --version
 
-sed -n '17,22p' samples.txt | tr '\t' '\n' | while read SAMPLE; do
+cat samples_nextdenovo.txt | tr '\t' '\n' | while read SAMPLE; do
    read GENOSIZE
 
    cp fof/${SAMPLE}.fof ./input.fof
