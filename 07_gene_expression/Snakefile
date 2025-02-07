@@ -1,0 +1,146 @@
+
+SAMPLES,=glob_wildcards("data/{sample}_1.fastq.gz")
+
+rule all:
+   input:
+      expand("output/03star/{sample}/Aligned.sortedByCoord.out.bam", sample=SAMPLES),
+      "output/05tpm/gene_tpms.txt"
+
+
+
+
+# split reads into those that match to P. trichocarpa and S. musiva 
+rule seal:
+   input:
+      R1="data/{sample}_1.fastq.gz",
+      R2="data/{sample}_2.fastq.gz"
+   output:
+      R1="output/01seal/{sample}_Smusiva_MN14_1.fq.gz",
+      R2="output/01seal/{sample}_Smusiva_MN14_2.fq.gz"
+   shell: """
+      seal.sh \
+         in1={input.R1} \
+         in2={input.R2} \
+         ref=data/Ptrichocarpa_plantgenie_v3.1_210_Smusiva_MN14_concat.fa \
+         pattern=output/01seal/{wildcards.sample}_%_#.fq.gz \
+         outu=output/01seal/{wildcards.sample}_unmapped_#.fq.gz \
+         ambig=toss \
+         threads=12 \
+         stats=output/01seal/{wildcards.sample}_stats.txt
+   """
+
+
+
+# trim reads to remove adapter sequences and based on Phread quality
+rule trim:
+   input:
+      R1="output/01seal/{sample}_Smusiva_MN14_1.fq.gz",
+      R2="output/01seal/{sample}_Smusiva_MN14_2.fq.gz"
+   output:
+      R1="output/02trim/{sample}_Smusiva_MN14_1.fq.gz",
+      R2="output/02trim/{sample}_Smusiva_MN14_2.fq.gz"
+   shell: """
+      bbduk.sh \
+         in={input.R1} \
+         in2={input.R2} \
+         out={output.R1} \
+         out2={output.R2} \
+         ref=data/adapters.fa \
+         ktrim=r \
+         k=23 \
+         mink=11 \
+         hdist=1 tpe tbo \
+         qtrim=rl trimq=10 minlen=40 \
+         threads=12 \
+         stats=output/02trim/{wildcards.sample}_trimstats.txt
+   """
+
+
+
+
+# build genome index with STAR before mapping reads
+rule star_index:
+   input:
+      "data/MN-14.fasta"
+   output:
+      directory("output/03star/index")
+   shell: """
+      STAR \
+         --runThreadN 1 \
+         --runMode genomeGenerate \
+         --genomeDir output/03star/index  \
+         --genomeSAindexNbases 11 \
+         --genomeFastaFiles {input}
+   """
+
+
+
+
+# map reads with STAR
+rule star_map:
+   input:
+      genomeDir="output/03star/index",
+      R1="output/02trim/{sample}_Smusiva_MN14_1.fq.gz",
+      R2="output/02trim/{sample}_Smusiva_MN14_2.fq.gz"
+   output:
+      "output/03star/{sample}/Aligned.sortedByCoord.out.bam"
+   shell: """
+      STAR  \
+       --readFilesCommand zcat \
+       --runThreadN 12 \
+       --genomeDir {input.genomeDir} \
+       --readFilesIn {input.R1} {input.R2} \
+       --outFileNamePrefix output/03star/{wildcards.sample}/ \
+       --outSAMtype BAM SortedByCoordinate  \
+       --twopassMode Basic \
+       --alignIntronMin 20 \
+       --alignIntronMax 2000 \
+       --outSAMstrandField intronMotif
+   """
+
+
+
+
+#===========
+rule featurecounts:
+   input:
+      bams=expand("output/03star/{sample}/Aligned.sortedByCoord.out.bam", sample=SAMPLES),
+      gtf="data/MN-14_genome.gtf"
+   output:
+      "output/04featurecounts/featurecounts_out.txt"
+   shell: """
+      featureCounts -p -T 12 -a {input.gtf} -o {output} {input.bams}
+   """
+#===========
+
+
+
+#===========
+# make it easier to read files in R to calculate TPM
+rule featurecounts_preprocess:
+   input:
+      "output/04featurecounts/featurecounts_out.txt"
+   output:
+      counts="output/04featurecounts/gene_counts.txt",
+      lengths="output/04featurecounts/gene_length.txt"
+   shell: """
+      tail -n+2 {input} | sed 's/Geneid//g' | cut -f 1,7-50 > {output.counts}
+      tail -n+2 {input} | sed 's/Geneid//g' | cut -f 1,6    > {output.lengths}
+   """
+#===========
+
+
+
+#===========
+#
+rule calculate_tpm:
+   input:
+      counts="output/04featurecounts/gene_counts.txt",
+      lengths="output/04featurecounts/gene_length.txt"
+   output:
+      "output/05tpm/gene_tpms.txt"
+   shell: """
+      Rscript scripts/calculate_tpm.R {input.counts} {input.lengths} {output}
+   """
+#===========
+
