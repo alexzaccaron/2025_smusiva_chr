@@ -1,3 +1,6 @@
 # 2025_smusiva_chr
 
-add info
+Repository containing scripts and code snippets used for comparative genomic analyses if a small population of isolates of the poplar pathogen Sphaerulina musiva.
+
+### 01_assemblies
+code snippets to produce the genome assemblies
