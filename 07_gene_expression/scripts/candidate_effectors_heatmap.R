@@ -3,11 +3,12 @@ library(ggplot2)
 library(pheatmap)
 
 
-tab_tpm_fname = "output/05tpm/gene_tpms.txt"
-tab_cnt_fname = "output/04featurecounts/gene_counts.txt"
-ssp_ids_fname = "data/candidate_effectors_ids.txt" 
-ssp_acc_ids_fname = "data/candidate_effectors_accessory_ids.txt"
-ssp_csep_ids_fname = "data/candidate_effectors_cloned_ids.txt"
+tab_tpm_fname = "output/05tpm/gene_tpms.txt"           # TPM values
+tab_cnt_fname = "output/04featurecounts/gene_counts.txt"   # raw counts of RNAseq reads mapped to the genes
+ssp_ids_fname = "data/candidate_effectors_ids.txt"         # gene IDs of candidate effectors
+ssp_acc_ids_fname = "data/candidate_effectors_accessory_ids.txt"     # gene IDs of accessory genes
+ssp_csep_ids_fname = "data/candidate_effectors_cloned_ids.txt"       # gene IDs of preiously cloned genes
+
 
 tab_tpm = read.table(tab_tpm_fname)
 tab_cnt = read.table(tab_cnt_fname)
@@ -20,12 +21,15 @@ ssp_csep_ids = readLines(ssp_csep_ids_fname)
 colnames(tab_tpm) = gsub(".Aligned.sortedByCoord.out.bam","",gsub("output.03star.", "", colnames(tab_tpm)))
 
 
-# remove TPM from low counts
+# remove TPM from low read counts
 tab_tpm[tab_cnt < 10] = NA
 
+
+# subset candidate effector genes
 tab_tpm_ssp = tab_tpm[ssp_ids,]
 
 
+# select these columns. They are already ordered based on host genotype, time points, and replicates
 tab_tpm_ssp = tab_tpm_ssp[,c("SRR10852271",
                              "SRR10852267",
                              "SRR10852266",
@@ -54,12 +58,18 @@ tab_tpm_ssp = tab_tpm_ssp[,c("SRR10852271",
                              "SRR10852341",
                              "SRR10852342")]
 
+
+# replace NA with 0s
 tab_tpm_ssp[is.na(tab_tpm_ssp)] = 0
 
+
+# remove genes for which TPM values are 0 for all samples
 tab_tpm_ssp = tab_tpm_ssp[rowSums(tab_tpm_ssp) > 0, ]
 
 
+# convert to matrix so it can be ploted
 df_matrix <- as.matrix(tab_tpm_ssp)
+
 
 # prepare annotation for rows (genes)
 row_annotation = data.frame(
