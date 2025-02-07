@@ -1,0 +1,15 @@
+sample	genSize	fastq
+AB-133	30	AB-133_rebasecall_sup5.fastq.gz
+BC-01	30	BC-01_rebasecall_sup5.fastq.gz BC-01_3rdrun_rebasecall_sup5.fastq.gz
+BC-06	30	BC-06_rebasecall_sup5.fastq.gz
+BC-126	30	BC-126_rebasecall_sup5.fastq.gz
+BC-14	30	BC-14_rebasecall_sup5.fastq.gz
+MN-5	30	MN-5_rebasecall_sup5.fastq.gz
+OH-1	30	OH-1_rebasecall_sup5.fastq.gz
+ON-143	30	ON-143_rebasecall_sup5.fastq.gz
+OR-9	30	OR-9_rebasecall_sup5.fastq.gz
+PA-19A	30	PA-19A_rebasecall_sup5.fastq.gz
+QC-157	30	QC-157_rebasecall_sup5.fastq.gz
+TN-1	30	TN-1_rebasecall_sup5.fastq.gz
+WI-244	30	WI-244_rebasecall_sup5.fastq.gz
+WV-2	30	WV-2_rebasecall_sup5.fastq.gz

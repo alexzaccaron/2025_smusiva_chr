@@ -1,0 +1,38 @@
+
+import pandas as pd
+
+samples_df = pd.read_table('data/assembler_input.tsv').set_index("sample", drop=False)
+#SAMPLES = list(samples_df['sample'])
+SAMPLES = ["BC-01"]
+
+
+rule all:
+   input:
+      expand("output/04canu_default/{sample}/canu.contigs.fasta" , sample=SAMPLES)
+
+
+
+
+rule canu:
+    output:
+       "output/04canu_default/{sample}/canu.contigs.fasta"
+    params:
+        # dynamically grab the input fastq files the "reads" column in the samples data frame
+        fastq = lambda wildcards: samples_df.loc[wildcards.sample, "fastq"],
+        gensize = lambda wildcards: samples_df.loc[wildcards.sample, "genSize"]
+    shell: """
+
+      # firt, activate my conda environment
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate canu
+
+      canu \
+         genomeSize={params.gensize}m \
+         -nanopore {params.fastq} \
+         useGrid=false \
+         -d output/04canu_default/{wildcards.sample} \
+         -p canu
+        """
+
+
+
