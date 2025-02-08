@@ -1,0 +1,52 @@
+
+
+SAMPLES,=glob_wildcards("data/{sample}.fasta")
+
+
+rule all:
+   input:
+      expand("output/{sample}/prediction_results.txt", sample=SAMPLES)
+
+
+
+##prepare_input: remove comments after whitespace in the fasta header, otherwise it will print in the signalp output
+rule prepare_input:
+   input:
+      "data/{sample}.fasta"
+   output:
+      "{sample}.fasta"
+   shell: """
+      sed '/^>/ s/ .*//g' {input} > {output}
+   """
+
+
+
+
+rule run_signalp6:
+   input:
+      "{sample}.fasta"
+   output:
+      "output/{sample}/prediction_results.txt"
+   log:
+      "logs/{sample}.log"
+   shell: """
+      
+      # activate conda environment
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate signalP6
+      
+      signalp6 \
+         --fastafile {input} \
+         --organism eukarya \
+         --output_dir output/{wildcards.sample} \
+         --write_procs 1 \
+         --torch_num_threads 2 \
+         --format none --mode fast > {log} 2>&1
+      
+      # temporary input no longer needed
+      rm -rf {input}
+   """
+      
+
+
+

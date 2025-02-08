@@ -1,0 +1,46 @@
+
+
+SAMPLES,=glob_wildcards("data/{sample}.fasta")
+
+
+rule all:
+   input:
+      expand("output/{sample}/out_summary.signalp5", sample=SAMPLES)
+
+
+
+##prepare_input: remove comments after whitespace in the fasta header, otherwise it will print in the signalp output
+rule prepare_input:
+   input:
+      "data/{sample}.fasta"
+   output:
+      "{sample}.fasta"
+   shell: """
+      sed '/^>/ s/ .*//g' {input} > {output}
+   """
+
+
+
+
+rule run_signalp5:
+   input:
+      "{sample}.fasta"
+   output:
+      "output/{sample}/out_summary.signalp5"
+   log:
+      "logs/{sample}.log"
+   shell: """
+      
+      signalp-5 \
+         -fasta {input} \
+         -gff3 \
+         -plot none \
+         -prefix output/{wildcards.sample}/out > {log} 2>&1
+      
+      # temporary input no longer needed
+      rm -rf {input}
+   """
+      
+
+
+

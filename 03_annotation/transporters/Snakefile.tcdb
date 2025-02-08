@@ -1,0 +1,48 @@
+
+
+SAMPLES,=glob_wildcards("data/{sample}.fasta")
+
+
+rule all:
+   input:
+      expand("output/{sample}/{sample}_tcdb_classification.txt", sample=SAMPLES)
+
+
+
+rule blastp :
+   input:
+      qry="data/{sample}.fasta",
+      db="/path/to/tcdb/tcdb_20241021.fasta"
+   output:
+      "output/{sample}/{sample}_tcdb_blastfmt6.txt"
+   shell: """
+      blastp \
+         -query {input.qry} \
+         -db {input.db} \
+         -outfmt 6 \
+         -evalue 1e-10 \
+         -max_target_seqs 1 \
+         -max_hsps 1 > {output}
+   """
+
+
+
+rule classify_transporters:
+   input:
+      blast="output/{sample}/{sample}_tcdb_blastfmt6.txt",
+      db="/path/to/tcdb/tcdb_20241021_families.txt"
+   output:
+      "output/{sample}/{sample}_tcdb_classification.txt"
+   shell: """
+      paste \
+         <(cut -f 1 {input.blast}) \
+         <(cut -f 2 {input.fasta} | \
+            awk -v FS="|" '{{print $NF}}' | \
+            awk -v FS="." -v OFS="." '{{print $1,$2,$3}}' | \
+            while read ID; do
+               grep -m 1 -w $ID {input.db}
+            done)
+   """
+
+
+
