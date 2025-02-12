@@ -1,0 +1,136 @@
+
+
+# Function to generate pairs of IDs from a file
+def generate_pairs(file):
+    # Open the file and read its contents
+    with open(file) as f:
+        # Create a list of IDs by stripping whitespace from each line
+        ids = [line.strip() for line in f]
+    # Generate pairs of IDs
+    # The first ID (ids[0] = MN-14) is paired with each subsequent ID
+    # Each pair is formatted as "id1.id2"
+    return [f"{ids[0]}.{ids[i]}" for i in range(1, len(ids))]
+
+
+# Use glob_wildcards to find all GFF files in the input directory
+# The {genome} wildcard captures the base name of each file
+GENOMES,=glob_wildcards("input/{genome}.gff")
+PAIRS=generate_pairs("input/order.txt")
+
+# Create a list of query genomes, excluding "MN-14"
+QUERIES=[genome for genome in GENOMES if genome != "MN-14"]   # remove MN-14
+
+
+
+rule all:
+   input:
+      expand("output/{genome}.cds", genome=GENOMES),
+      expand("output/{genome}.bed", genome=GENOMES),
+      expand("output/{pair}.lifted.anchors.simple", pair=PAIRS),
+      expand("output/inversions/{query}", query=QUERIES)
+      
+
+
+
+rule get_cds:
+   input:
+      gff="input/{genome}.gff",
+      fasta="input/{genome}.fasta"
+   output:
+      "output/{genome}.cds"
+   log:
+      "logs/{genome}_agat_sp_extract_sequences.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate agat
+
+      agat_sp_extract_sequences.pl --keep_parent_attributes --type cds --gff {input.gff} --fasta {input.fasta} -o {output} > {log} 2>&1
+
+      # keep parent gene IDs
+      sed -i '/^>/ s/.*gene=/>/g ; s/ .*//g' {output}
+   """
+
+
+
+rule get_bed:
+   input:
+      gff="input/{genome}.gff",
+   output:
+      "output/{genome}.bed"
+   log:
+      "logs/jcvi.formats/{genome}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      python -m jcvi.formats.gff bed --type=mRNA --key=Parent {input} -o {output} > {log} 2>&1
+   """
+
+
+
+
+rule jcvi_ortholog:
+   input:
+      expand("output/{genome}.cds", genome=GENOMES),
+      expand("output/{genome}.bed", genome=GENOMES),
+   output:
+      "output/{pair}.lifted.anchors"
+   log:
+      "logs/jcvi.compara.catalog/{pair}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      cd output/
+      GENOME1=$(echo {wildcards.pair} | tr '.' '\\n' | head -n+1)
+      GENOME2=$(echo {wildcards.pair} | tr '.' '\\n' | tail -n1)
+
+      python -m jcvi.compara.catalog ortholog --cpus 1 $GENOME1 $GENOME2 > ../{log} 2>&1
+   """
+
+
+
+
+rule jcvi_anchors:
+   input:
+      "output/{pair}.lifted.anchors"
+   output:
+      "output/{pair}.lifted.anchors.simple"
+   log:
+      "logs/jcvi.compara.synteny/{pair}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      python -m jcvi.compara.synteny screen --minspan=10 --simple {input} {output} > {log} 2>&1
+   """
+
+
+
+
+rule test:
+   input:
+      anchor="output/MN-14.{query}.lifted.anchors.simple",
+      bed="output/MN-14.bed"
+   output:
+      directory("output/inversions/{query}")
+   shell: """
+      mkdir -p {output}
+      awk '$NF=="-"' {input.anchor} | \
+   
+      # print start and end genes of the inversion
+      awk '{{print $1"\\n"$2}}' | \
+
+         while read START; do          
+            read END
+         
+            # print genes in between start and end, i.e., all genes in the inversion. Assuming bed file is sorted (it is) 
+            sed -n "/$START/,/$END/p" {input.bed} > {output}/inversion_${{START}}_${{END}}.bed
+      done
+   """
+
+
+
+
+
+

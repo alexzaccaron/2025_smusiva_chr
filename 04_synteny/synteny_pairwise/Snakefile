@@ -1,0 +1,155 @@
+
+
+# Function to generate pairs of IDs from a file
+def generate_pairs(file):
+    # Open the file and read its contents
+    with open(file) as f:
+        # Create a list of IDs by stripping whitespace from each line
+        ids = [line.strip() for line in f]
+    # Generate pairs of consecutive IDs
+    # Each pair is formatted as "id1.id2"
+    return [f"{ids[i]}.{ids[i+1]}" for i in range(len(ids) - 1)]
+
+
+# Use glob_wildcards to find all GFF files in the input directory
+# The {genome} wildcard captures the base name of each file
+GENOMES,=glob_wildcards("input/{genome}.gff")
+PAIRS=generate_pairs("input/order.txt")
+
+
+
+
+
+
+rule all:
+   input:
+      expand("output/{genome}.cds", genome=GENOMES),
+      expand("output/{genome}.bed", genome=GENOMES),
+      expand("output/{pair}.lifted.anchors.simple", pair=PAIRS),
+      "karyotype.pdf"
+
+
+
+# extract CDS features from GFF files
+rule get_cds:
+   input:
+      gff="input/{genome}.gff",
+      fasta="input/{genome}.fasta"
+   output:
+      "output/{genome}.cds"
+   log:
+      "logs/{genome}_agat_sp_extract_sequences.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate agat
+
+      agat_sp_extract_sequences.pl --keep_parent_attributes --type cds --gff {input.gff} --fasta {input.fasta} -o {output} > {log} 2>&1
+
+      # keep parent gene IDs
+      sed -i '/^>/ s/.*gene=/>/g ; s/ .*//g' {output}
+   """
+
+
+
+# Use jcvi to convert CDS in GFF format to BED, which will be used as input to jcvi later on
+rule get_bed:
+   input:
+      gff="input/{genome}.gff",
+   output:
+      "output/{genome}.bed"
+   log:
+      "logs/jcvi.formats/{genome}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      python -m jcvi.formats.gff bed --type=mRNA --key=Parent {input} -o {output} > {log} 2>&1
+   """
+
+
+
+# get pairs of orthologs between pairs of genomes
+rule jcvi_ortholog:
+   input:
+      expand("output/{genome}.cds", genome=GENOMES),
+      expand("output/{genome}.bed", genome=GENOMES),
+   output:
+      "output/{pair}.lifted.anchors"
+   log:
+      "logs/jcvi.compara.catalog/{pair}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      cd output/
+      GENOME1=$(echo {wildcards.pair} | tr '.' '\\n' | head -n+1)
+      GENOME2=$(echo {wildcards.pair} | tr '.' '\\n' | tail -n1)
+
+      python -m jcvi.compara.catalog ortholog --cpus 1 $GENOME1 $GENOME2 > ../{log} 2>&1
+   """
+
+
+
+# get gene anchors that will define start and end of synteny blocks
+rule jcvi_anchors:
+   input:
+      "output/{pair}.lifted.anchors"
+   output:
+      "output/{pair}.lifted.anchors.simple"
+   log:
+      "logs/jcvi.compara.synteny/{pair}.log"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+
+      python -m jcvi.compara.synteny screen --minspan=10 --simple {input} {output} > {log} 2>&1
+   """
+
+
+
+# change color of inversions so they are more visible in the synteny plot
+rule change_color_inversions:
+   input:
+      "output/{pair}.lifted.anchors.simple"
+   output:
+      "output/{pair}_inv_color_changed.flag"
+   shell: """
+      sed -i '/-$/ s/^/g*/g' {input}
+      touch {output}
+   """
+
+
+
+# prepare conf files required to generate the synteny plot
+rule get_layout_seqids:
+   input:
+      expand("output/{pair}.lifted.anchors.simple", pair=PAIRS),
+      expand("output/{pair}_inv_color_changed.flag", pair=PAIRS)
+   output:
+      layout="layout",
+      seqids="seqids"
+   shell: """
+      scripts/prepare_layout.sh > {output.layout}
+      scripts/prepare_seqids.sh > {output.seqids}
+   """
+
+
+
+# make the synteny plot
+rule karyotype:
+   input:
+      layout="layout",
+      seqids="seqids"
+   output:
+      "karyotype.pdf"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate jcvi
+      
+      python -m jcvi.graphics.karyotype --figsize=11x10 --chrstyle=rect --nocircles {input.seqids} {input.layout}
+   """
+
+
+
+
+
