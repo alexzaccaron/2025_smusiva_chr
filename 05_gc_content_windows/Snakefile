@@ -1,0 +1,49 @@
+
+
+
+
+SAMPLES,=glob_wildcards("input/{sample}.fasta")
+
+
+rule all:
+   input:
+      expand("output/{sample}.nuc.txt", sample=SAMPLES)
+
+
+
+rule faidx:
+   input:
+      "input/{sample}.fasta"
+   output:
+      "input/{sample}.fasta.fai"
+   shell: """
+      samtools faidx {input}
+   """
+
+
+rule bedtools_nuc:
+   input:
+      fasta="input/{sample}.fasta",
+      faidx="input/{sample}.fasta.fai"
+   output:
+      "output/{sample}.nuc.txt"
+   params:
+      w=10000     # window size
+   shell: """
+      cut -f 1,2 {input} | bedtools makewindows -g stdin -w {params.w} | bedtools nuc -bed stdin -fi {input.fasta} > {output}
+   """
+
+
+
+rule plot_gc:
+   input:
+      expand("output/{sample}.nuc.txt", sample=SAMPLES)
+   output:
+      "plot.pdf"
+   shell: """
+      eval "$(/nfs7/BPP/Weisberg_Lab/lab_members/zaccaron/miniforge3/condabin/conda shell.bash hook)"
+      conda activate r
+      Rscript scripts/plot_gc_lines.R
+   """
+
+
