@@ -7,3 +7,5 @@ code snippets to produce the genome assemblies
 
 ### 02_gene_prediction
 code snippets to predict the genes
+
+update
